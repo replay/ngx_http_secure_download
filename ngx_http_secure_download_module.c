@@ -39,7 +39,6 @@ typedef struct {
   ngx_str_t secret;
   ngx_array_t  *secret_lengths;
   ngx_array_t  *secret_values;
-  ngx_str_t fail_location;
 } ngx_http_secure_download_loc_conf_t;
 
 static ngx_command_t ngx_http_secure_download_commands[] = {
@@ -66,14 +65,6 @@ static ngx_command_t ngx_http_secure_download_commands[] = {
     NGX_HTTP_LOC_CONF_OFFSET,
     offsetof(ngx_http_secure_download_loc_conf_t, secret),
     &ngx_http_secure_download_secret_p
-  },
-  {
-    ngx_string("secure_download_fail_location"),
-    NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-    ngx_conf_set_str_slot,
-    NGX_HTTP_LOC_CONF_OFFSET,
-    offsetof(ngx_http_secure_download_loc_conf_t, fail_location),
-    NULL
   }
 };
 
@@ -140,8 +131,6 @@ static void * ngx_http_secure_download_create_loc_conf(ngx_conf_t *cf)
   conf->path_mode = NGX_CONF_UNSET;
   conf->secret.data = NULL;
   conf->secret.len = 0;
-  conf->fail_location.data = NULL;
-  conf->fail_location.len = 0;
   return conf;
 }
 
@@ -153,14 +142,8 @@ static char * ngx_http_secure_download_merge_loc_conf (ngx_conf_t *cf, void *par
   ngx_conf_merge_value(conf->enable, prev->enable, 0);
   ngx_conf_merge_value(conf->path_mode, prev->path_mode, FOLDER_MODE);
   ngx_conf_merge_str_value(conf->secret, prev->secret, "");
-  ngx_conf_merge_str_value(conf->fail_location, prev->fail_location, "");
   
   if (conf->enable == 1) {
-      if (conf->fail_location.len == 0) {
-          ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-               "no secure_download_fail_location specified");
-          return NGX_CONF_ERROR;
-      }
       if (conf->secret.len == 0) {
           ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                "no secure_download_secret specified");
