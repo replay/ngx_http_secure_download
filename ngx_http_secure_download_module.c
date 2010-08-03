@@ -25,8 +25,8 @@ static ngx_int_t ngx_http_secure_download_split_uri (ngx_http_request_t*, ngx_ht
 static ngx_int_t ngx_http_secure_download_check_hash(ngx_http_request_t*, ngx_http_secure_download_split_uri_t*, ngx_str_t*);
 static void * ngx_http_secure_download_create_loc_conf(ngx_conf_t*);
 static char * ngx_http_secure_download_merge_loc_conf (ngx_conf_t*, void*, void*);
-static ngx_int_t ngx_http_secure_download_init(ngx_conf_t*);
-static ngx_int_t ngx_http_secure_download_handler (ngx_http_request_t*);
+static ngx_int_t ngx_http_secure_download_add_variables(ngx_conf_t *cf);
+static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data);
 static char * ngx_conf_set_path_mode(ngx_conf_t*, ngx_command_t*, void*);
 
 static char *ngx_http_secure_download_secret(ngx_conf_t *cf, void *post, void *data);
@@ -78,8 +78,8 @@ static ngx_command_t ngx_http_secure_download_commands[] = {
 };
 
 static ngx_http_module_t ngx_http_secure_download_module_ctx = {
+  ngx_http_secure_download_add_variables,
   NULL,
-  ngx_http_secure_download_init,
 
   NULL,
   NULL,
@@ -105,6 +105,8 @@ ngx_module_t ngx_http_secure_download_module = {
   NULL,
   NGX_MODULE_V1_PADDING
 };
+
+static ngx_str_t  ngx_http_secure_download = ngx_string("secure_download");
 
 static char * ngx_conf_set_path_mode(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
@@ -169,75 +171,95 @@ static char * ngx_http_secure_download_merge_loc_conf (ngx_conf_t *cf, void *par
   return NGX_CONF_OK;
 }
 
-static ngx_int_t ngx_http_secure_download_init(ngx_conf_t *cf)
-{
-  ngx_http_handler_pt        *h; 
-  ngx_http_core_main_conf_t  *cmcf;
-
-  cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
-
-  h = ngx_array_push(&cmcf->phases[NGX_HTTP_ACCESS_PHASE].handlers);
-  if (h == NULL) {
-    return NGX_ERROR;
-  }   
-
-  *h = ngx_http_secure_download_handler;
-  return NGX_OK;
-}
-
-static ngx_int_t ngx_http_secure_download_handler (ngx_http_request_t *r)
-{
+static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
   unsigned timestamp;
+  unsigned remaining_time = 0;
   ngx_http_secure_download_loc_conf_t *sdc;
   ngx_http_secure_download_split_uri_t sdsu;
   ngx_str_t rel_path;
   ngx_str_t secret;
-
+  int value = 0;
+  
   sdc = ngx_http_get_module_loc_conf(r, ngx_http_secure_download_module);
-  if ((sdc->enable != 1) || (r->internal > 0))
+  if (sdc->enable != 1)
   {
-    return NGX_OK;
+      value = -3;
+      goto finish;
   }
-
+  
   if (!sdc->secret_lengths || !sdc->secret_values) {
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-    "securedownload: module enabled, but secret key not configured!");
-    return NGX_HTTP_FORBIDDEN;
+      ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+          "securedownload: module enabled, but secret key not configured!");
+      value = -3;
+      goto finish;
   }
 
   if (ngx_http_secure_download_split_uri(r, &sdsu) == NGX_ERROR)
   {
     ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "received an error from ngx_http_secure_download_split_uri", 0);
-    return ngx_http_internal_redirect(r, &sdc->fail_location, &r->args);
+    value = -3;
+    goto finish;
   }
 
   if (sscanf(sdsu.timestamp, "%08X", &timestamp) != 1)
   {
     ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "error in timestamp hex-dec conversion", 0);
-    return ngx_http_internal_redirect(r, &sdc->fail_location, &r->args);
+    value = -3;
+    goto finish;
   }
-  if (time(NULL) > (time_t) timestamp)
+  
+  remaining_time = timestamp - (unsigned) time(NULL);
+  if ((int)remaining_time <= 0)
   {
     ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "expired timestamp", 0);
-    return ngx_http_internal_redirect(r, &sdc->fail_location, &r->args);
+    value = -1;
+    goto finish;
   }
   
   if (ngx_http_script_run(r, &secret, sdc->secret_lengths->elts, 0, sdc->secret_values->elts) == NULL) {
       ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
           "securedownload: evaluation failed");
-      return NGX_ERROR;
+      value = -3;
+      goto finish;
   }
+  
   ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
     "securedownload: evaluated value of secret: \"%V\"", &secret);
     
-  if (ngx_http_secure_download_check_hash(r, &sdsu, &secret) == NGX_ERROR)
+  if (ngx_http_secure_download_check_hash(r, &sdsu, &secret) != NGX_OK)
   {
     ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "bad hash", 0);
-    return ngx_http_internal_redirect(r, &sdc->fail_location, &r->args);
+    value = -2;
+    goto finish;
   }
+  
   rel_path.data = r->uri.data;
   rel_path.len = sdsu.path_len;
-  return ngx_http_internal_redirect(r, &rel_path, &r->args);
+  
+  finish: 
+  
+  v->not_found = 0;
+  v->valid = 1;
+  v->no_cacheable = 0;
+  v->not_found = 0;
+  if (value == 0)
+  {
+    v->data = ngx_pcalloc(r->pool, sizeof(char) * 12);
+    if (v->data == NULL) {
+        return NGX_ERROR;
+    }
+    v->len = (int) sprintf((char *)v->data, "%i", remaining_time);
+    printf("valid, %i\n", remaining_time);
+  } else {
+    v->data = ngx_pcalloc(r->pool, sizeof(char) * 2);
+    if (v->data == NULL) {
+        return NGX_ERROR;
+    }
+    v->len = (int) sprintf((char*)v->data, "%i", value);
+    printf("problem %i\n", value);
+  }
+  
+  return NGX_OK;
 }
 
 //////////////////////
@@ -376,5 +398,18 @@ static ngx_int_t ngx_http_secure_download_split_uri(ngx_http_request_t *r, ngx_h
   return NGX_OK;
 }
 
+static ngx_int_t
+ngx_http_secure_download_add_variables(ngx_conf_t *cf)
+{
+    ngx_http_variable_t  *var;
 
+    var = ngx_http_add_variable(cf, &ngx_http_secure_download, NGX_HTTP_VAR_NOHASH);
+    if (var == NULL) {
+        return NGX_ERROR;
+    }
+
+    var->get_handler = ngx_http_secure_download_variable;
+
+    return NGX_OK;
+}
 
