@@ -236,7 +236,7 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
     v->len = (int) sprintf((char *)v->data, "%i", remaining_time);
     //printf("valid, %i\n", remaining_time);
   } else {
-    v->data = ngx_pcalloc(r->pool, sizeof(char) * 2);
+    v->data = ngx_pcalloc(r->pool, sizeof(char) * 3);
     if (v->data == NULL) {
         return NGX_ERROR;
     }
