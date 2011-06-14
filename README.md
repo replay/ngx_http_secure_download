@@ -1,1 +1,5 @@
-Documentation: [ngx_http_secure_download](http://wiki.nginx.org/NginxHttpSecureDownload "ngx_http_secure_download")
+Deprecated
+==========
+
+This module is deprecated since all of its functionality was added to nginx' own secure_link module.
+
