@@ -181,14 +181,14 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
 
   if (ngx_http_secure_download_split_uri(r, &sdsu) == NGX_ERROR)
   {
-    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "received an error from ngx_http_secure_download_split_uri", 0);
+    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: received an error from ngx_http_secure_download_split_uri", 0);
     value = -3;
     goto finish;
   }
 
   if (sscanf(sdsu.timestamp, "%08X", &timestamp) != 1)
   {
-    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "error in timestamp hex-dec conversion", 0);
+    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: error in timestamp hex-dec conversion", 0);
     value = -3;
     goto finish;
   }
@@ -196,7 +196,7 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
   remaining_time = timestamp - (unsigned) time(NULL);
   if ((int)remaining_time <= 0)
   {
-    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "expired timestamp", 0);
+    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: expired timestamp", 0);
     value = -1;
     goto finish;
   }
@@ -207,22 +207,22 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
       value = -3;
       goto finish;
   }
-  
+
   ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
     "securedownload: evaluated value of secret: \"%V\"", &secret);
-    
+
   if (ngx_http_secure_download_check_hash(r, &sdsu, &secret) != NGX_OK)
   {
-    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "bad hash", 0);
+    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: bad hash", 0);
     value = -2;
     goto finish;
   }
-  
+
   rel_path.data = r->uri.data;
   rel_path.len = sdsu.path_len;
-  
-  finish: 
-  
+
+  finish:
+
   v->not_found = 0;
   v->valid = 1;
   v->no_cacheable = 0;
@@ -243,7 +243,7 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
     v->len = (int) sprintf((char*)v->data, "%i", value);
     //printf("problem %i\n", value);
   }
-  
+
   return NGX_OK;
 }
 
@@ -298,7 +298,7 @@ static ngx_int_t ngx_http_secure_download_check_hash(ngx_http_request_t *r, ngx_
   hash_data = malloc(data_len + 1);
   if (hash_data == NULL)
   {
-    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "error in allocating memory for string_to_hash.data", 0);
+    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: error in allocating memory for string_to_hash.data", 0);
     return NGX_ERROR;
   }
 
@@ -316,27 +316,27 @@ static ngx_int_t ngx_http_secure_download_check_hash(ngx_http_request_t *r, ngx_
 
   if (td == MHASH_FAILED)
   {
-	free(hash_data);
+    free(hash_data);
     return NGX_ERROR;
   }
-  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "hashing string \"%s\" with len %i", hash_data, data_len);
+  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: hashing string \"%s\" with len %i", hash_data, data_len);
   mhash(td, hash_data, data_len);
   mhash_deinit(td, generated_hash);
 
   free(hash_data);
 
   for (i = 0; i < 16; ++i) {
-	  hash[2 * i + 0] = xtoc[generated_hash[i] >> 4];
-	  hash[2 * i + 1] = xtoc[generated_hash[i] & 0xf];
+    hash[2 * i + 0] = xtoc[generated_hash[i] >> 4];
+    hash[2 * i + 1] = xtoc[generated_hash[i] & 0xf];
   }
-  
+
   hash[32] = 0; //because %.32 doesn't work
-  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "computed hash: %32s", hash); 
+  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: computed hash: %32s", hash); 
   // ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "hash from uri: %.32s", sdsu->md5);
 
   if(memcmp(hash, sdsu->md5, 32) != 0) {
-	  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "hash mismatch", 0); 	  
-	  return NGX_ERROR;
+    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: hash mismatch", 0);
+    return NGX_ERROR;
   }
 
   return NGX_OK;
@@ -354,7 +354,7 @@ static ngx_int_t ngx_http_secure_download_split_uri(ngx_http_request_t *r, ngx_h
   while(len && uri[--len] != '/')
 	  ++tstamp_len;
   if(tstamp_len != 8) {
-	  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "timestamp size mismatch: %d", tstamp_len);
+	  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: timestamp size mismatch: %d", tstamp_len);
 	  return NGX_ERROR;
   }
   sdsu->timestamp = uri + len + 1;
@@ -362,13 +362,13 @@ static ngx_int_t ngx_http_secure_download_split_uri(ngx_http_request_t *r, ngx_h
   while(len && uri[--len] != '/')
 	  ++md5_len;
   if(md5_len != 32) {
-	  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "md5 size mismatch: %d", md5_len);
+	  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: md5 size mismatch: %d", md5_len);
 	  return NGX_ERROR;
   }
   sdsu->md5 = uri + len + 1;
 
   if(len == 0) {
-	  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "bad path", 0);
+	  ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "securedownload: bad path", 0);
 	  return NGX_ERROR;
   }
 
