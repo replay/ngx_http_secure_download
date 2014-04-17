@@ -142,7 +142,7 @@ static char * ngx_http_secure_download_merge_loc_conf (ngx_conf_t *cf, void *par
   ngx_conf_merge_value(conf->enable, prev->enable, 0);
   ngx_conf_merge_value(conf->path_mode, prev->path_mode, FOLDER_MODE);
   ngx_conf_merge_str_value(conf->secret, prev->secret, "");
-  
+
   if (conf->enable == 1) {
       if (conf->secret.len == 0) {
           ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
@@ -150,7 +150,7 @@ static char * ngx_http_secure_download_merge_loc_conf (ngx_conf_t *cf, void *par
           return NGX_CONF_ERROR;
       }
   }
-  
+
   return NGX_CONF_OK;
 }
 
@@ -159,10 +159,9 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
   unsigned remaining_time = 0;
   ngx_http_secure_download_loc_conf_t *sdc;
   ngx_http_secure_download_split_uri_t sdsu;
-  ngx_str_t rel_path;
   ngx_str_t secret;
   int value = 0;
-  
+
   sdc = ngx_http_get_module_loc_conf(r, ngx_http_secure_download_module);
   if (sdc->enable != 1)
   {
@@ -171,7 +170,7 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
       value = -3;
       goto finish;
   }
-  
+
   if (!sdc->secret_lengths || !sdc->secret_values) {
       ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
           "securedownload: module enabled, but secret key not configured!");
@@ -192,7 +191,7 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
     value = -3;
     goto finish;
   }
-  
+
   remaining_time = timestamp - (unsigned) time(NULL);
   if ((int)remaining_time <= 0)
   {
@@ -200,7 +199,7 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
     value = -1;
     goto finish;
   }
-  
+
   if (ngx_http_script_run(r, &secret, sdc->secret_lengths->elts, 0, sdc->secret_values->elts) == NULL) {
       ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
           "securedownload: evaluation failed");
@@ -217,9 +216,6 @@ static ngx_int_t ngx_http_secure_download_variable(ngx_http_request_t *r, ngx_ht
     value = -2;
     goto finish;
   }
-
-  rel_path.data = r->uri.data;
-  rel_path.len = sdsu.path_len;
 
   finish:
 
